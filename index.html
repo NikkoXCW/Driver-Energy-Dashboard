@@ -1,1 +1,107 @@
-const BACKEND_URL = "https://<your-api>.onrender.com"; // set to your Render URL
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Driver Energy Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin:0; background:#f7f7fb}
+header{padding:16px 20px; background:white; box-shadow: 0 1px 8px rgba(0,0,0,.05); position:sticky; top:0; z-index:10}
+.wrap{max-width:1100px; margin:16px auto; padding:0 16px}
+.card{background:white; border-radius:16px; padding:16px; box-shadow:0 1px 10px rgba(0,0,0,.06)}
+table{width:100%; border-collapse:collapse}
+thead th{position:sticky; top:0; background:#fafafa; text-align:left; padding:8px; border-bottom:1px solid #eee}
+tbody td{padding:8px; border-bottom:1px solid #f0f0f0}
+
+
+/* Login overlay */
+#loginOverlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:linear-gradient(135deg,#e8f3ff,#fff);}
+.login-card{width:100%; max-width:380px; background:white; border-radius:16px; padding:20px; box-shadow:0 8px 40px rgba(0,0,0,.12)}
+.login-card h2{margin:0 0 10px 0}
+.login-card label{display:block; margin:10px 0 4px}
+.login-card input{width:100%; padding:10px; border:1px solid #ddd; border-radius:10px}
+.login-card button{width:100%; margin-top:12px; padding:10px 12px; border:0; border-radius:12px; background:#0b5cff; color:white; font-weight:600; cursor:pointer}
+.err{color:#c0392b; margin-top:8px; min-height:1em}
+</style>
+</head>
+<body>
+<header>
+<strong>Driver Energy Dashboard</strong>
+</header>
+<div class="wrap">
+<div class="card" style="margin-bottom:16px">
+<canvas id="energyChart" height="120"></canvas>
+</div>
+<div class="card">
+<table id="energyTable">
+<thead><tr><th>Timestamp</th><th>Driver</th><th>Energy (kWh)</th><th>Trip (km)</th><th>Notes</th></tr></thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+
+
+<!-- Login Overlay -->
+<div id="loginOverlay">
+<div class="login-card">
+<h2>Sign in</h2>
+<p style="color:#444; margin:0 0 8px">Enter your user ID and password to view the dashboard.</p>
+<label for="username">User ID</label>
+<input id="username" autocomplete="username" />
+<label for="password">Password</label>
+<input id="password" type="password" autocomplete="current-password" />
+<button id="loginBtn">Continue</button>
+<div class="err" id="loginErr"></div>
+</div>
+</div>
+
+
+<script>
+const BACKEND_URL = "https://<your-render-service>.onrender.com"; // CHANGE ME
+const TOKEN_KEY = "driver_energy_token";
+
+
+function getToken(){ return localStorage.getItem(TOKEN_KEY); }
+function setToken(t){ localStorage.setItem(TOKEN_KEY, t); }
+function clearToken(){ localStorage.removeItem(TOKEN_KEY); }
+
+
+async function api(path, opts={}){
+const headers = opts.headers || {};
+const token = getToken();
+if (token) headers["Authorization"] = `Bearer ${token}`;
+headers["Content-Type"] = headers["Content-Type"] || "application/json";
+const res = await fetch(`${BACKEND_URL}${path}`, { ...opts, headers });
+if (res.status === 401){ clearToken(); showLogin(); throw new Error("Unauthorized"); }
+if (!res.ok){ throw new Error(await res.text()); }
+return res.json();
+}
+
+
+function showLogin(){ document.getElementById('loginOverlay').style.display='flex'; }
+function hideLogin(){ document.getElementById('loginOverlay').style.display='none'; }
+
+
+async function tryBoot(){
+if (!getToken()){ showLogin(); return; }
+try { await loadData(); } catch { /* token likely invalid */ showLogin(); }
+}
+
+
+async function doLogin(){
+const u = document.getElementById('username').value.trim();
+const p = document.getElementById('password').value;
+const err = document.getElementById('loginErr'); err.textContent = '';
+try{
+const data = await api('/auth/login', { method:'POST', body: JSON.stringify({username:u, password:p}), headers: {'Content-Type':'application/json'} });
+setToken(data.token);
+hideLogin();
+await loadData();
+}catch(e){ err.textContent = 'Invalid credentials'; }
+}
+
+
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+</html>
